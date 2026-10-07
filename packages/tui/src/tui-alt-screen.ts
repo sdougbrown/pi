@@ -18,7 +18,7 @@ import {
 	type ScrollbarGeometry,
 } from "./layout.ts";
 import { getLayoutNode } from "./layout-node.ts";
-import type { Terminal } from "./terminal.ts";
+import { type Terminal, tmuxPassthrough } from "./terminal.ts";
 import {
 	deleteAllKittyImages,
 	deleteAllKittyPlacements,
@@ -1472,7 +1472,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
 			);
 			return ok;
 		}
-		this.terminal.write(`\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
+		this.terminal.write(tmuxPassthrough(`\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`));
 		this.flash("Copied!");
 		return true;
 	}

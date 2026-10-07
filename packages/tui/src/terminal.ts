@@ -34,6 +34,17 @@ function isKeyboardProtocolNegotiationSequencePrefix(sequence: string): boolean 
 	return sequence === "\x1b[" || /^\x1b\[\?[\d;]*$/.test(sequence);
 }
 
+/**
+ * Wrap a sequence in the tmux DCS passthrough (`\ePtmux;\e<sequence>\e\\`) so tmux forwards
+ * it to its client terminal instead of consuming it. tmux intercepts clipboard writes (OSC 52)
+ * and stores them in its paste buffer without relaying them to the client, so they need this
+ * wrap to reach the outer terminal when running inside tmux.
+ */
+export function tmuxPassthrough(sequence: string): string {
+	if (!process.env.TMUX) return sequence;
+	return `\x1bPtmux;\x1b${sequence}\x1b\\`;
+}
+
 export function isAppleTerminalSession(): boolean {
 	return process.platform === "darwin" && process.env.TERM_PROGRAM === "Apple_Terminal";
 }

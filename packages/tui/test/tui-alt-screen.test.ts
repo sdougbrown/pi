@@ -1309,6 +1309,37 @@ describe("TuiAltScreen", () => {
 		tui.stop();
 	});
 
+	it("wraps the OSC 52 copy in the tmux passthrough when running inside tmux", async () => {
+		const savedTmux = process.env.TMUX;
+		process.env.TMUX = "/tmp/tmux-0/default,1234,0";
+		try {
+			const terminal = new RecordingTerminal(20, 4);
+			const tui = new TuiAltScreen(terminal);
+			tui.addChild(new Text("alpha\nbeta", 0, 0));
+			tui.start();
+			await terminal.waitForRender();
+
+			terminal.sendInput("\x1b[<0;1;1M");
+			terminal.sendInput("\x1b[<32;4;2M");
+			terminal.sendInput("\x1b[<3;4;2m");
+			await terminal.waitForRender();
+
+			const wrapped = `\x1bPtmux;\x1b\x1b]52;c;${Buffer.from("alpha\nbeta").toString("base64")}\x07\x1b\\`;
+			const clipboardWrites = terminal.events.filter(
+				(event) => event.type === "write" && event.data.includes("\x1b]52;c;"),
+			);
+			assert.ok(
+				clipboardWrites.some((event) => event.type === "write" && event.data.includes(wrapped)),
+				JSON.stringify(clipboardWrites),
+			);
+
+			tui.stop();
+		} finally {
+			if (savedTmux === undefined) delete process.env.TMUX;
+			else process.env.TMUX = savedTmux;
+		}
+	});
+
 	it("uses an injected copySelection handler instead of OSC 52 and reports success", async () => {
 		const terminal = new RecordingTerminal(20, 4);
 		const copied: string[] = [];

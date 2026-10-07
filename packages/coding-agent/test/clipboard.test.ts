@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import type * as OsModule from "node:os";
+import type * as PiTuiModule from "@earendil-works/pi-tui";
 import type { NativeClipboard } from "@earendil-works/pi-tui";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { copyToClipboard, readClipboardText } from "../src/utils/clipboard.ts";
@@ -21,12 +22,18 @@ const mocks = vi.hoisted(() => ({
 		>(),
 	platform: vi.fn<() => NodeJS.Platform>(),
 }));
-vi.mock("@earendil-works/pi-tui", () => ({ getNativeClipboard: mocks.getNativeClipboard }));
+vi.mock("@earendil-works/pi-tui", async () => ({
+	...(await vi.importActual<typeof PiTuiModule>("@earendil-works/pi-tui")),
+	getNativeClipboard: mocks.getNativeClipboard,
+}));
 vi.mock("../src/utils/clipboard-command.ts", () => ({ runClipboardCommand: mocks.command }));
 vi.mock("node:os", async () => ({
 	...(await vi.importActual<typeof OsModule>("node:os")),
 	platform: mocks.platform,
 }));
+
+const OSC52_PREFIX = "\x1b]52;c;";
+const TMUX_WRAPPED_OSC52_PREFIX = `\x1bPtmux;\x1b${OSC52_PREFIX}`;
 
 let originalWrite: typeof process.stdout.write;
 let osc52Writes: string[];
@@ -42,6 +49,7 @@ beforeEach(() => {
 		"WT_SESSION",
 		"WSL_DISTRO_NAME",
 		"WSLENV",
+		"TMUX",
 	])
 		vi.stubEnv(name, "");
 	mocks.platform.mockReturnValue("darwin");
@@ -53,7 +61,10 @@ beforeEach(() => {
 	originalWrite = process.stdout.write.bind(process.stdout);
 	process.stdout.write = ((...args: Parameters<typeof process.stdout.write>) => {
 		const [chunk] = args;
-		if (typeof chunk === "string" && chunk.startsWith("\x1b]52;c;")) {
+		if (
+			typeof chunk === "string" &&
+			(chunk.startsWith(OSC52_PREFIX) || chunk.startsWith(TMUX_WRAPPED_OSC52_PREFIX))
+		) {
 			osc52Writes.push(chunk);
 			return true;
 		}
@@ -182,6 +193,8 @@ describe("copyToClipboard", () => {
 		await copyToClipboard("hello");
 		expect(mocks.command).not.toHaveBeenCalled();
 		expect(osc52Writes).toHaveLength(1);
+		const encoded = Buffer.from("hello").toString("base64");
+		expect(osc52Writes[0]).toBe(`\x1b]52;c;${encoded}\x07`);
 	});
 	test("WSL without a display writes the Windows clipboard through PowerShell", async () => {
 		// Regression test for #9688: WSL with WSLg disabled.
@@ -272,5 +285,15 @@ describe("copyToClipboard", () => {
 			"Clipboard unavailable: text exceeds the OSC 52 size limit",
 		);
 		expect(osc52Writes).toHaveLength(0);
+	});
+	test("wraps OSC 52 in the tmux passthrough when running inside tmux", async () => {
+		vi.stubEnv("SSH_CONNECTION", "client server");
+		vi.stubEnv("TMUX", "/tmp/tmux-0/default,1234,0");
+		mocks.clipboard.setText.mockRejectedValue(new Error("native failed"));
+		mocks.command.mockResolvedValue(undefined);
+		await copyToClipboard("hello");
+		expect(osc52Writes).toHaveLength(1);
+		const encoded = Buffer.from("hello").toString("base64");
+		expect(osc52Writes[0]).toBe(`\x1bPtmux;\x1b\x1b]52;c;${encoded}\x07\x1b\\`);
 	});
 });
