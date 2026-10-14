@@ -138,6 +138,29 @@ describe("copyToClipboard", () => {
 			timeoutMs: 5000,
 		});
 	});
+	test("user copyCommand receives the text and wins over the command backends", async () => {
+		mocks.platform.mockReturnValue("linux");
+		vi.stubEnv("SSH_CONNECTION", "client server");
+		await copyToClipboard("hello", { copyCommand: "my-copier" });
+		expect(mocks.command).toHaveBeenCalledWith("sh", ["-c", "my-copier"], { input: "hello", timeoutMs: 5000 });
+		expect(mocks.clipboard.setText).not.toHaveBeenCalled();
+		// Remote sessions still emit OSC 52 so the client clipboard is reached too.
+		expect(osc52Writes).toHaveLength(1);
+	});
+	test("a failing copyCommand falls back to the built-in backends", async () => {
+		mocks.clipboard.setText.mockRejectedValue(new Error("native failed"));
+		mocks.command.mockImplementation(async (name) => (name === "sh" ? undefined : Buffer.alloc(0)));
+		await copyToClipboard("hello", { copyCommand: "my-copier" });
+		expect(mocks.command.mock.calls.map(([name]) => name)).toEqual(["sh", "pbcopy"]);
+		expect(osc52Writes).toHaveLength(0);
+	});
+	test("a failing copyCommand falls back to OSC 52 in a remote headless session", async () => {
+		mocks.platform.mockReturnValue("linux");
+		vi.stubEnv("SSH_CONNECTION", "client server");
+		await copyToClipboard("hello", { copyCommand: "my-copier" });
+		expect(mocks.command.mock.calls.map(([name]) => name)).toEqual(["sh"]);
+		expect(osc52Writes).toHaveLength(1);
+	});
 	test("waits for the native write before emitting remote OSC 52", async () => {
 		vi.stubEnv("SSH_CONNECTION", "client server");
 		let complete = () => {};

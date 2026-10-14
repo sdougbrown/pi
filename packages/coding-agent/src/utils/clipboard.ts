@@ -77,10 +77,23 @@ export async function readClipboardFilePaths(): Promise<string[] | null> {
 	return paths?.length ? paths : null;
 }
 
-export async function copyToClipboard(text: string): Promise<void> {
+export interface CopyToClipboardOptions {
+	/** Shell command that receives the text on stdin, tried before built-in backends and OSC 52. */
+	copyCommand?: string;
+}
+
+export async function copyToClipboard(text: string, options?: CopyToClipboardOptions): Promise<void> {
 	const p = platform();
 	const env = process.env;
 	let copied = false;
+	if (options?.copyCommand) {
+		// Explicit user override: win over every built-in path so exotic containers stay configurable.
+		if (
+			(await runClipboardCommand("sh", ["-c", options.copyCommand], { input: text, timeoutMs: 5000 })) !== undefined
+		) {
+			copied = true;
+		}
+	}
 	// Direct writes precede OSC 52 so the terminal cannot race the native writer.
 	// Linux tools retain clipboard selection ownership after this call returns.
 	if (p !== "linux") {

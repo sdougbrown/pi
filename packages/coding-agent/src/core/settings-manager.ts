@@ -69,6 +69,12 @@ export interface ImageSettings {
 	blockImages?: boolean; // default: false - when true, prevents all images from being sent to LLM providers
 }
 
+export interface ClipboardSettings {
+	/** Shell command that receives copied text on stdin. Escape hatch for multiplexers and remote setups
+	 * the built-in backends cannot reach; tried before them and before OSC 52, and a failure falls back. */
+	copyCommand?: string;
+}
+
 export interface ThinkingBudgetsSettings {
 	minimal?: number;
 	low?: number;
@@ -164,6 +170,7 @@ export interface Settings {
 	enableSkillCommands?: boolean; // default: true - register skills as /skill:name commands
 	terminal?: TerminalSettings;
 	images?: ImageSettings;
+	clipboard?: ClipboardSettings;
 	enabledModels?: string[]; // Model patterns for cycling (same format as --models CLI flag)
 	defaultTools?: string[]; // Initial tool selection; `+name`/`-name` entries add to or remove from the inherited selection
 	doubleEscapeAction?: "fork" | "tree" | "none"; // Action for double-escape with empty editor (default: "tree")
@@ -1378,6 +1385,11 @@ export class SettingsManager {
 
 	getFullscreenCopyOnSelect(): boolean {
 		return this.settings.fullscreenCopyOnSelect ?? true;
+	}
+
+	getClipboardCopyCommand(): string | undefined {
+		const command = this.settings.clipboard?.copyCommand?.trim();
+		return command ? command : undefined;
 	}
 
 	setFullscreenCopyOnSelect(enabled: boolean): void {
