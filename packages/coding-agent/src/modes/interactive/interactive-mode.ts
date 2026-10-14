@@ -627,6 +627,7 @@ export class InteractiveMode {
 			onRightClickPaste: this.onRightClickPaste,
 			fullscreenCopyOnSelect: this.settingsManager.getFullscreenCopyOnSelect(),
 			fullscreenWheelScrollLines: this.settingsManager.getFullscreenWheelScrollLines(),
+			clipboardCopyCommand: this.settingsManager.getClipboardCopyCommand(),
 		});
 		this.ui = createInteractiveTuiReference(() => this.renderer);
 		this.ui.setClearOnShrink(this.settingsManager.getClearOnShrink());
@@ -915,6 +916,7 @@ export class InteractiveMode {
 			onRightClickPaste: this.onRightClickPaste,
 			fullscreenCopyOnSelect: this.settingsManager.getFullscreenCopyOnSelect(),
 			fullscreenWheelScrollLines: this.settingsManager.getFullscreenWheelScrollLines(),
+			clipboardCopyCommand: this.settingsManager.getClipboardCopyCommand(),
 		});
 		nextUi.setClearOnShrink(clearOnShrink);
 		nextUi.onDebug = onDebug;
@@ -5695,7 +5697,7 @@ export class InteractiveMode {
 					return;
 				}
 				try {
-					await copyToClipboard(text);
+					await copyToClipboard(text, { copyCommand: this.settingsManager.getClipboardCopyCommand() });
 					this.showStatus("Copied selected message to clipboard");
 				} catch (error) {
 					this.showError(error instanceof Error ? error.message : String(error));
@@ -6654,7 +6656,7 @@ export class InteractiveMode {
 		}
 
 		try {
-			await copyToClipboard(text);
+			await copyToClipboard(text, { copyCommand: this.settingsManager.getClipboardCopyCommand() });
 			if (options.flashConfirmation && this.ui instanceof TuiAltScreen) {
 				this.ui.flash("Copied!");
 			} else {

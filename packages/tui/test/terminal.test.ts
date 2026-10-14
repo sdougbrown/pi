@@ -6,6 +6,7 @@ import {
 	normalizeNativeShiftEnterInput,
 	ProcessTerminal,
 	resolveEscapeTimeoutMs,
+	tmuxPassthrough,
 } from "../src/terminal.ts";
 
 describe("resolveEscapeTimeoutMs", () => {
@@ -28,6 +29,29 @@ describe("resolveEscapeTimeoutMs", () => {
 
 	it("defaults to 10ms otherwise", () => {
 		assert.equal(resolveEscapeTimeoutMs({}), 10);
+	});
+});
+
+describe("tmuxPassthrough", () => {
+	it("returns the sequence unchanged outside tmux", () => {
+		const saved = process.env.TMUX;
+		delete process.env.TMUX;
+		try {
+			assert.equal(tmuxPassthrough("\x1b]52;c;aGVsbG8=\x07"), "\x1b]52;c;aGVsbG8=\x07");
+		} finally {
+			if (saved !== undefined) process.env.TMUX = saved;
+		}
+	});
+
+	it("wraps the sequence in the tmux DCS passthrough inside tmux", () => {
+		const saved = process.env.TMUX;
+		process.env.TMUX = "/tmp/tmux-0/default,1234,0";
+		try {
+			assert.equal(tmuxPassthrough("\x1b]52;c;aGVsbG8=\x07"), "\x1bPtmux;\x1b\x1b]52;c;aGVsbG8=\x07\x1b\\");
+		} finally {
+			if (saved !== undefined) process.env.TMUX = saved;
+			else delete process.env.TMUX;
+		}
 	});
 });
 
